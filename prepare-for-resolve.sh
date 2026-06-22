@@ -3,6 +3,14 @@
 # Remuxes AAC audio to PCM — video stream is untouched (fast)
 # Creates new _resolve.mov files, originals are never modified
 
+# Check for ffmpeg
+if ! command -v ffmpeg &> /dev/null; then
+    echo "❌ Error: ffmpeg is not installed."
+    echo "   To install it on Fedora (requires RPM Fusion), run:"
+    echo "   sudo dnf install -y ffmpeg"
+    exit 1
+fi
+
 CONVERTED=0
 SKIPPED=0
 
