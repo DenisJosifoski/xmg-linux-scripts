@@ -96,6 +96,20 @@ A helper script generated in the user's home folder by the fixer script. It sets
 
 * **How to use:** Keep this script in your home folder. If you launch Resolve from the desktop/applications menu, the patched shortcut runs it automatically. If you want to launch from the terminal, run `~/resolve-launch.sh`.
 
+### `prepare-for-resolve.sh` (AAC-to-PCM Audio Transcoder)
+A highly useful helper utility that scans the directory for `.mp4`, `.mov`, and `.mkv` files and remuxes their AAC audio to raw 24-bit PCM (`pcm_s24le`) while copying the video stream untouched. 
+
+* **Why it's needed:** DaVinci Resolve on Linux has native audio limitations (especially with AAC audio codec parsing on free/studio versions depending on packaging). Running this script allows you to quickly make your camera footage fully compatible with Resolve without re-rendering the video stream.
+* **Prerequisites:** Requires `ffmpeg` installed on your system.
+* **Download & Run:**
+  ```bash
+  curl -L -o prepare-for-resolve.sh https://raw.githubusercontent.com/DenisJosifoski/xmg-linux-scripts/main/prepare-for-resolve.sh
+  chmod +x prepare-for-resolve.sh
+  # Run it in any directory containing video files:
+  ./prepare-for-resolve.sh
+  ```
+* **Native AAC Playback Alternative (DaVinci Resolve Studio only):** If you own the Studio version of Resolve and prefer native AAC playback/encoding inside the application without transcoding your media files, you can install the external [Resolve-Linux-Studio-AAC-FDK-Encoder-plugin](https://github.com/hexitnz/Resolve-Linux-Studio-AAC-FDK-Encoder-plugin).
+
 ---
 
 ## Troubleshooting
@@ -125,6 +139,11 @@ A helper script generated in the user's home folder by the fixer script. It sets
   *(Note: The `--disable-gpu` flag is applied automatically by the installer script depending on its NVIDIA driver version detection, which requires driver version ≥ 545 for hardware acceleration. The manual CLI command above is strictly for testing and verification purposes.)*
   
   If it loads successfully with `--disable-gpu`, check that the patched `.desktop` file matches this configuration.
+
+---
+
+## Disclaimer
+These scripts are provided as-is, and you run them at your own risk. The author takes no responsibility for any data loss, hardware issues, system instability, or other problems that may arise from using them.
 
 ---
 
