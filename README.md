@@ -165,11 +165,19 @@ fedora-xmg-m25.sh (Run this after Steps A, B & C)
 Download DaVinci Resolve Studio .zip from blackmagicdesign.com
     │
 fedora-resolve-installer.sh
+    └── Installs system dependencies (like libxcrypt-compat) first
     └── Unzips and executes Blackmagic .run GUI installer
     └── Triggers fedora-resolve-fix.sh automatically
           ├── Moves conflicting Fedora system glib/gio libraries to /opt/resolve/libs/disabled-libraries/
           ├── Patches system application .desktop shortcuts with NVIDIA PRIME flags
-          └── Generates ~/resolve-launch.sh in your home directory (KDE appmenu workaround)
+          ├── Generates ~/resolve-launch.sh in your home directory (KDE appmenu workaround)
+          └── Configures KWin window rule to force window decoration/title bar on KDE Plasma
+
+fedora-antigravity-fix.sh (1-Click Installer & Fixer)
+    └── Automatically downloads and installs Antigravity IDE (if not present)
+    └── Surgically swaps unstable @parcel/watcher v2.5.1 with stable v2.5.6 C++ node module
+    └── Prevents massive coredumps, high CPU usage, and 90°C+ heat spikes on exit
+    └── Registers system-wide and user desktop shortcuts
 ```
 
 ---
@@ -207,7 +215,7 @@ A master installation script that pulls the latest `tuxedo-drivers` from Tuxedo'
 ## 2. DaVinci Resolve Studio Automation
 
 ### `fedora-resolve-installer.sh` (Automated Installer Wrapper)
-Automates the entire DaVinci Resolve Studio installation process on Fedora. It extracts the installer, bypasses incompatible package checks (`SKIP_PACKAGE_CHECK=1`), executes the GUI installer, calls the fixer script, and performs post-install cleanup.
+Automates the entire DaVinci Resolve Studio installation process on Fedora. It extracts the installer, automatically installs system dependencies (like `libxcrypt-compat`), bypasses incompatible package checks (`SKIP_PACKAGE_CHECK=1`), executes the GUI installer, calls the fixer script, and performs post-install cleanup.
 
 * **Requirements:** Place the downloaded DaVinci Resolve `.zip` installer in the same folder where you run this script.
 * **Download & Run:**
@@ -218,7 +226,7 @@ Automates the entire DaVinci Resolve Studio installation process on Fedora. It e
   ```
 
 ### `fedora-resolve-fix.sh` (Post-Install Fixer)
-Solves library conflicts on Fedora (moves conflicting `glib` and `gio` libraries to a backup folder) and updates desktop application shortcuts to launch Resolve using NVIDIA discrete graphics. This is triggered automatically by the installer script, but can be run independently if needed.
+Solves library conflicts on Fedora (moves conflicting `glib` and `gio` libraries to a backup folder), updates desktop application shortcuts to launch Resolve using NVIDIA discrete graphics, and automatically configures a KWin Window Rule to force window decorations (title bar, frame) on KDE Plasma systems. This is triggered automatically by the installer script, but can be run independently if needed.
 
 * **Download & Run:**
   ```bash
@@ -250,6 +258,26 @@ A highly useful helper utility that scans the directory for `.mp4`, `.mov`, and 
 
 ---
 
+## 3. Antigravity IDE Automation
+
+### `fedora-antigravity-fix.sh` (Installer & Surgical Teardown Patch)
+Surgically patches the Google Antigravity IDE on Fedora KDE to resolve a critical CPU spike and hardware stress (90°C+) occurring on application exit. 
+
+* **Why it's needed:** The IDE bundles `@parcel/watcher` v2.5.1, which has a known teardown race condition on Linux, triggering a `SIGSEGV` crash in the background node service. This crash prompts `systemd-coredump` to compress and write a massive multi-gigabyte coredump on exit, causing extreme CPU usage and heating.
+* **What it does under the hood:**
+  * Detects a local Antigravity IDE installation tarball in `~/Downloads` or automatically fetches the latest stable release URL.
+  * Installs the IDE to `/opt/antigravity-ide` if not already present.
+  * Downloads stable `@parcel/watcher` v2.5.6 from NPM registry and swaps the native C++ node module (`watcher.node`) into the IDE's installation folder.
+  * Registers system-wide and user desktop `.desktop` shortcuts.
+* **Download & Run:**
+  ```bash
+  curl -L -o fedora-antigravity-fix.sh https://raw.githubusercontent.com/DenisJosifoski/xmg-linux-scripts/main/fedora-antigravity-fix.sh
+  chmod +x fedora-antigravity-fix.sh
+  sudo ./fedora-antigravity-fix.sh
+  ```
+
+---
+
 ## Troubleshooting
 
 ### 1. DKMS compilation/build fails during driver setup
@@ -260,13 +288,20 @@ A highly useful helper utility that scans the directory for `.mp4`, `.mov`, and 
   ```
   And then re-run the driver script.
 
-### 2. DaVinci Resolve crashes immediately on launch
+### 2. DaVinci Resolve crashes immediately on launch / nothing happens
 * **Symptom:** Clicking the DaVinci Resolve application shortcut flashes a loading cursor, then exits without opening a window.
 * **Solution:** Run the generated launch script manually from a terminal to see the error output:
   ```bash
   bash ~/resolve-launch.sh
   ```
-  If it outputs symbol lookup errors related to `glib` or `gio`, verify that `fedora-resolve-fix.sh` successfully moved those libraries out of `/opt/resolve/libs/`.
+  * **Missing `libcrypt.so.1`:** If it says `error while loading shared libraries: libcrypt.so.1: cannot open shared object file`, ensure `libxcrypt-compat` is installed by running `sudo dnf install -y libxcrypt-compat`. (The updated `fedora-resolve-installer.sh` now installs this automatically).
+  * **Glib/Gio Conflicts:** If it outputs symbol lookup errors related to `glib` or `gio`, verify that `fedora-resolve-fix.sh` successfully moved those libraries out of `/opt/resolve/libs/` to `/opt/resolve/libs/disabled-libraries/`.
+
+### 6. DaVinci Resolve is missing the title bar / window controls
+* **Symptom:** DaVinci Resolve opens, but has no title bar or borders, making it impossible to minimize, maximize, or close using window controls.
+* **Solution:** On KDE Plasma, DaVinci Resolve requests KWin to hide borders. The fixer script `fedora-resolve-fix.sh` automatically configures a KWin Window Rule to override this. If you are experiencing this:
+  1. Confirm the rule is in place (or re-run `fedora-resolve-fix.sh`).
+  2. Alternatively, open **System Settings > Window Management > Window Rules**, find the rule for DaVinci Resolve, and ensure **No titlebar and frame** is set to **Force -> No**.
 
 ### 3. Tuxedo Control Center fails to open or crashes on Wayland
 * **Symptom:** TCC starts in the background but the interface won't load or displays a blank window.
