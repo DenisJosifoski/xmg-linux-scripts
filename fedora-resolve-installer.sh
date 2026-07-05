@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # DaVinci Resolve Studio Automated Installer (Fedora)
-# 1. Unzips installer 2. Runs with Bypass 3. Triggers Fixer
+# 1. Unzips installer 2. Installs dependencies 3. Runs installer 4. Triggers Fixer
 # ============================================================
 
 set -euo pipefail
@@ -19,7 +19,7 @@ if [ -z "$ZIP_FILE" ]; then
     exit 1
 fi
 
-echo "[1/4] Unzipping $ZIP_FILE..."
+echo "[1/5] Unzipping $ZIP_FILE..."
 # -o overwrites without asking, -q is quiet
 unzip -oq "$ZIP_FILE"
 echo "✅ Unzipped successfully."
@@ -32,14 +32,18 @@ if [ -z "$RUN_FILE" ]; then
     exit 1
 fi
 
-# 3. Run the Installer
-echo "[2/4] Launching installer (Bypassing package check)..."
+# 3. Install System Dependencies
+echo "[2/5] Installing legacy system dependencies (libxcrypt-compat)..."
+sudo dnf install -y libxcrypt-compat
+
+# 4. Run the Installer
+echo "[3/5] Launching installer (Bypassing package check)..."
 echo "      Please follow the GUI prompts to complete installation."
 chmod +x "$RUN_FILE"
 sudo SKIP_PACKAGE_CHECK=1 ./"$RUN_FILE"
 echo "✅ Installation process finished."
 
-# 4. Run the Fixer Script
+# 5. Run the Fixer Script
 # Check current directory first, then fallback to HOME
 FIX_SCRIPT_NAME="fedora-resolve-fix.sh"
 FIX_SCRIPT_PATH=""
@@ -51,15 +55,15 @@ elif [ -f "$HOME/$FIX_SCRIPT_NAME" ]; then
 fi
 
 if [ -n "$FIX_SCRIPT_PATH" ]; then
-    echo "[3/4] Running GPU & Keyboard Fixer ($FIX_SCRIPT_PATH)..."
+    echo "[4/5] Running GPU & Keyboard Fixer ($FIX_SCRIPT_PATH)..."
     bash "$FIX_SCRIPT_PATH"
     echo "✅ System patched successfully."
 else
     echo "⚠️ Warning: Fixer script ($FIX_SCRIPT_NAME) not found in current dir or $HOME. Skipping patching."
 fi
 
-# 5. Cleanup (Optional)
-echo "[4/4] Cleaning up installer file..."
+# 6. Cleanup (Optional)
+echo "[5/5] Cleaning up installer file..."
 rm "$RUN_FILE"
 echo "✅ Cleanup complete."
 
