@@ -42,14 +42,24 @@ TARGET_WATCHER="${TARGET_WATCHER_DIR}/watcher.node"
 # 1. Verify or automatically install Antigravity IDE
 if [ ! -d "$IDE_PATH" ]; then
     echo -e "${BLUE}Antigravity IDE not found at ${IDE_PATH}.${NC}"
-    echo -e "${BLUE}Attempting to locate installation tarball in Downloads...${NC}"
+    echo -e "${BLUE}Attempting to locate installation tarball...${NC}"
     
     # Resolve user's download directory
     USER_HOME=$(eval echo "~${SUDO_USER:-root}")
     DOWNLOADS_DIR="${USER_HOME}/Downloads"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
-    # Look for the tarball
-    TARBALL=$(find "$DOWNLOADS_DIR" -maxdepth 1 -name "Antigravity*.tar.gz" | head -n 1)
+    # Look for the tarball in script directory, current directory, user home, and then Downloads
+    TARBALL=""
+    for search_dir in "$SCRIPT_DIR" "$(pwd)" "$USER_HOME" "$DOWNLOADS_DIR"; do
+        if [ -d "$search_dir" ]; then
+            FOUND=$(find "$search_dir" -maxdepth 1 -name "Antigravity*.tar.gz" | head -n 1)
+            if [ -n "$FOUND" ]; then
+                TARBALL="$FOUND"
+                break
+            fi
+        fi
+    done
     
     if [ -z "$TARBALL" ]; then
         echo -e "${BLUE}No local tarball found. Querying AUR for the latest Antigravity IDE version...${NC}"
@@ -154,7 +164,17 @@ fi
 
 echo -e "${GREEN}Surgical binary patch successfully applied!${NC}"
 
-# 4. Create and patch system-wide .desktop entry
+# 4. Detect actual executable name and create system-wide .desktop entry
+EXEC_BINARY=""
+if [ -f "${IDE_PATH}/antigravity-ide" ]; then
+    EXEC_BINARY="antigravity-ide"
+elif [ -f "${IDE_PATH}/antigravity" ]; then
+    EXEC_BINARY="antigravity"
+else
+    echo -e "${RED}Error: Could not find executable binary (antigravity or antigravity-ide) in ${IDE_PATH}.${NC}"
+    exit 1
+fi
+
 DESKTOP_PATH="/usr/share/applications/antigravity-ide.desktop"
 echo -e "${BLUE}Updating system desktop entry at ${DESKTOP_PATH}...${NC}"
 
@@ -162,7 +182,7 @@ cat <<EOF > "$DESKTOP_PATH"
 [Desktop Entry]
 Name=Antigravity IDE (Patched)
 Comment=Professional Development Environment (Surgically Patched)
-Exec=${IDE_PATH}/antigravity-ide %F
+Exec=${IDE_PATH}/${EXEC_BINARY} %F
 Icon=${IDE_PATH}/resources/app/resources/linux/code.png
 Type=Application
 Categories=Development;IDE;
