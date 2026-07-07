@@ -190,11 +190,39 @@ with open(path, 'w') as f:
 print("Keyboard/Custom Profile Patch applied.")
 PYEOF
 
+# Patch src/clevo_leds.h to disable ACPI LEDs for X6PR5xxW_X6RP5xxW to avoid name collisions
+LEDS_FILE="src/clevo_leds.h"
+if [ -f "$LEDS_FILE" ]; then
+    echo "  → Applying Clevo LEDs conflict patch..."
+    python3 - "$LEDS_FILE" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path, 'r') as f:
+    content = f.read()
+
+early_return = (
+    'int clevo_leds_init(struct platform_device *dev)\n'
+    '{\n'
+    '\tif (dmi_match(DMI_BOARD_NAME, "X6PR5xxW_X6RP5xxW")) {\n'
+    '\t\tpr_info("tuxedo_keyboard: Disabling ACPI LEDs for per-key RGB compatibility\\n");\n'
+    '\t\treturn 0;\n'
+    '\t}\n'
+)
+
+if 'Disabling ACPI LEDs for per-key RGB compatibility' not in content:
+    content = content.replace('int clevo_leds_init(struct platform_device *dev)\n{', early_return)
+
+with open(path, 'w') as f:
+    f.write(content)
+PYEOF
+fi
+
 grep -q "SchenkerTechnologiesGmbH" "$PATCH_FILE" || {
     echo "❌ DMI Patch verification failed."
     exit 1
 }
 echo "✅ Source patches applied."
+
 echo
 
 # ------------------------------------------------------------
@@ -335,15 +363,29 @@ echo
 # Step 6 - Kernel Module Refresh
 # ------------------------------------------------------------
 echo "[6/7] Reloading kernel modules..."
-for m in tuxedo_keyboard tuxedo_compatibility_check tuxedo_io tuxedo_nb02_nvidia_power_ctrl
+for m in tuxedo_keyboard tuxedo_compatibility_check tuxedo_io tuxedo_nb02_nvidia_power_ctrl ite_8291 ite_8291_lb ite_8297 ite_829x
 do
     sudo modprobe -r "$m" 2>/dev/null || true
 done
 
+sudo modprobe ite_8291 2>/dev/null || true
 sudo modprobe tuxedo_compatibility_check
 sudo modprobe tuxedo_keyboard
 sudo modprobe tuxedo_io
 sudo modprobe tuxedo_nb02_nvidia_power_ctrl
+
+# Reset the USB device to force a re-bind if it was detached by a crashed app
+ITE_USB_DEV=$(grep -l "048d" /sys/bus/usb/devices/*/idVendor 2>/dev/null | head -n 1 | xargs dirname)
+if [ -n "$ITE_USB_DEV" ] && [ -d "$ITE_USB_DEV" ]; then
+    echo "  → Resetting ITE USB device at ${ITE_USB_DEV}..."
+    echo 0 | sudo tee "${ITE_USB_DEV}/authorized" >/dev/null || true
+    sleep 1
+    echo 1 | sudo tee "${ITE_USB_DEV}/authorized" >/dev/null || true
+    sleep 1
+fi
+
+echo "  → Restarting TUXEDO Control Center Service..."
+sudo systemctl restart tccd.service || true
 
 echo "✅ Drivers reloaded."
 echo
