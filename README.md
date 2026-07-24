@@ -195,7 +195,7 @@ A master installation script that pulls the latest `tuxedo-drivers` from Tuxedo'
     1. *Intel Atom Header Fix:* Replaces `INTEL_ATOM_AIRMONT_MID` with `INTEL_ATOM_AIRMONT_NP` to maintain kernel compatibility.
     2. *GCC 14 Pointer Fix:* Removes strict pointer enforcement errors (`.owner = THIS_MODULE`) in `clevo_acpi.c`.
     3. *Schenker DMI Whitelist Bypass:* Automatically whitelists the Schenker board model (`X6PR5xxW_X6RP5xxW`) to allow Tuxedo drivers to run on XMG systems.
-    4. *Clevo LEDs Conflict Patch:* Disables redundant ACPI-based LED registration in `tuxedo_keyboard` for the `X6PR5xxW_X6RP5xxW` board, preventing name collisions with the `ite_8291` per-key RGB driver that cause `tccd` crashes on newer kernels.
+    4. *Clevo & Uniwill LEDs Conflict Patch:* Disables redundant ACPI-based LED registration in `tuxedo_keyboard` (under both Clevo and Uniwill layouts) for the `X6PR5xxW_X6RP5xxW` board, preventing name collisions with the `ite_8291` per-key RGB driver that cause `tccd` crashes on newer kernels.
   * Adjusts power limit configuration (TDP limits) specific to the M25 chassis.
   * Automatically configures and rebuilds 27 kernel modules in DKMS.
   * Patches the Tuxedo Control Center `.desktop` shortcuts to launch with GPU-aware Electron flags (`--ozone-platform-hint=auto` or `--disable-gpu`) depending on your NVIDIA driver version to ensure stability under Wayland.
@@ -207,8 +207,13 @@ A master installation script that pulls the latest `tuxedo-drivers` from Tuxedo'
   ```
 * **Updates & Kernel Upgrades:**
   * **Kernel Upgrades (`dnf upgrade`):** Because the drivers are registered through **DKMS**, they will automatically compile and install for new kernels whenever your system is updated. You do **not** need to re-run the script after normal kernel updates.
-  * **Driver Updates:** Whenever Tuxedo releases a new driver update on GitLab, you can simply run `fedora-xmg-m25.sh` again. The script is fully idempotent and will automatically unregister the old version, pull the latest code from GitLab, re-apply your custom patches, and build/register the new version.
-  * **Important:** Avoid installing or upgrading `tuxedo-drivers` packages directly via the TUXEDO RPM repository, as those packages will overwrite these custom-patched drivers and lack the Schenker DMI whitelist bypass and custom TDP limits.
+  * **Driver Updates / DNF Package Updates:** 
+    * If `tuxedo-drivers` is updated via DNF (e.g. from the TUXEDO RPM repository during a `sudo dnf update`), it will overwrite the custom-patched drivers with the official, unpatched ones. This will temporarily break DMI compatibility on Schenker/XMG hardware.
+    * **To restore compatibility**, you must manually re-run the installation script:
+      ```bash
+      sudo bash fedora-xmg-m25.sh
+      ```
+    * The script is fully idempotent. It will automatically clean up the conflicted DKMS states, pull the latest source code from Tuxedo's GitLab, re-apply the custom Schenker DMI whitelist bypass and M25 TDP limits, and reinstall them cleanly.
   * **Fedora Major Version Upgrades:** These scripts were developed and tested on **Fedora 44**. After upgrading to a new Fedora major version (e.g. F44 → F45), re-run `fedora-xmg-m25.sh` to rebuild the drivers against the new kernel and verify TCC desktop patches are still in place.
 
 ---
@@ -316,7 +321,13 @@ Surgically patches the Google Antigravity IDE on Fedora KDE to resolve a critica
 
 * **Symptom: TCC won't open and logs "dbusController: init failed => DBusError: The name is not activatable"**
   * **Cause:** The `tccd` background daemon crashed because of an `ENOENT` error looking for the `/sys/class/leds/rgb:kbd_backlight/multi_intensity` file. This happens on newer kernels when `tuxedo_keyboard` and `ite_8291` conflict over the `rgb:kbd_backlight` LED name, causing all per-key LEDs to get renamed to `rgb:kbd_backlight_1` to `rgb:kbd_backlight_125`, and leaving the USB keyboard interface in a detached state.
-  * **Solution:** Re-run the updated `fedora-xmg-m25.sh` script. It contains a conflict patch for `clevo_leds.h` that disables the redundant ACPI-based LED registration, refreshes the `ite_8291` modules, resets the USB controller to restore driver bindings, and restarts the `tccd` daemon.
+  * **Solution:** Re-run the updated `fedora-xmg-m25.sh` script. It contains conflict patches for `clevo_leds.h` and `uniwill_leds.h` that disable the redundant ACPI-based LED registration, refreshes the `ite_8291` modules, resets the USB controller to restore driver bindings, and restarts the `tccd` daemon.
+  * **If using XMG Backlight Management App:** To run both TCC (for fan curves/power limits) and the XMG Backlight Management app (for key colors) simultaneously without conflicts, blacklist the `ite_8291` kernel driver:
+    ```bash
+    echo "blacklist ite_8291" | sudo tee /etc/modprobe.d/blacklist-ite_8291.conf
+    ```
+    This stops the kernel driver from loading, allowing TCC to run stably and the XMG Backlight app to control the LEDs directly in user-space.
+
 
 ### 4. TCC `.desktop` files weren't patched (no files found)
 * **Symptom:** Script completes but reports no `.desktop` files were patched for TCC.

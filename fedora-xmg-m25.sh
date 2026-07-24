@@ -217,6 +217,34 @@ with open(path, 'w') as f:
 PYEOF
 fi
 
+# Patch src/uniwill_leds.h to disable ACPI LEDs for X6PR5xxW_X6RP5xxW to avoid name collisions
+UW_LEDS_FILE="src/uniwill_leds.h"
+if [ -f "$UW_LEDS_FILE" ]; then
+    echo "  → Applying Uniwill LEDs conflict patch..."
+    python3 - "$UW_LEDS_FILE" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path, 'r') as f:
+    content = f.read()
+
+early_return = (
+    'int uniwill_leds_init(struct platform_device *dev)\n'
+    '{\n'
+    '\tif (dmi_match(DMI_BOARD_NAME, "X6PR5xxW_X6RP5xxW")) {\n'
+    '\t\tpr_info("tuxedo_keyboard: Disabling ACPI LEDs in uniwill_leds for per-key RGB compatibility\\n");\n'
+    '\t\treturn 0;\n'
+    '\t}\n'
+)
+
+if 'Disabling ACPI LEDs in uniwill_leds for per-key RGB compatibility' not in content:
+    content = content.replace('int uniwill_leds_init(struct platform_device *dev)\n{', early_return)
+
+with open(path, 'w') as f:
+    f.write(content)
+PYEOF
+fi
+
+
 grep -q "SchenkerTechnologiesGmbH" "$PATCH_FILE" || {
     echo "❌ DMI Patch verification failed."
     exit 1
@@ -372,7 +400,7 @@ sudo modprobe ite_8291 2>/dev/null || true
 sudo modprobe tuxedo_compatibility_check
 sudo modprobe tuxedo_keyboard
 sudo modprobe tuxedo_io
-sudo modprobe tuxedo_nb02_nvidia_power_ctrl
+sudo modprobe tuxedo_nb02_nvidia_power_ctrl 2>/dev/null || true
 
 # Reset the USB device to force a re-bind if it was detached by a crashed app
 ITE_USB_DEV=$(grep -l "048d" /sys/bus/usb/devices/*/idVendor 2>/dev/null | head -n 1 | xargs dirname)
@@ -384,8 +412,15 @@ if [ -n "$ITE_USB_DEV" ] && [ -d "$ITE_USB_DEV" ]; then
     sleep 1
 fi
 
+# Conflict Prevention: Disable TCC keyboard backlight control if XMG Backlight app is installed
+if [ -d "/usr/share/xmg-backlight" ] && [ -f "/etc/tcc/settings" ]; then
+    echo "  → XMG Backlight Management detected. Disabling TCC keyboard control to prevent conflicts..."
+    sudo sed -i 's/"keyboardBacklightControlEnabled":true/"keyboardBacklightControlEnabled":false/g' /etc/tcc/settings || true
+fi
+
 echo "  → Restarting TUXEDO Control Center Service..."
 sudo systemctl restart tccd.service || true
+
 
 echo "✅ Drivers reloaded."
 echo
@@ -429,8 +464,11 @@ for f in $TCC_DESKTOP_FILES; do
     fi
 done
 
-# System-wide hint for any other wayland/electron issues
-echo "export ELECTRON_OZONE_PLATFORM_HINT=auto" | sudo tee /etc/profile.d/tcc-stability.sh >/dev/null
+# Clean up legacy system-wide wayland hints that break Electron keyrings (e.g. agy login)
+if [ -f "/etc/profile.d/tcc-stability.sh" ]; then
+    sudo rm -f /etc/profile.d/tcc-stability.sh
+fi
+
 
 echo
 echo "============================================================"
