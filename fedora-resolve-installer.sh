@@ -20,9 +20,20 @@ if [ -z "$ZIP_FILE" ]; then
 fi
 
 echo "[1/5] Unzipping $ZIP_FILE..."
-# -o overwrites without asking, -q is quiet
-unzip -oq "$ZIP_FILE"
-echo "✅ Unzipped successfully."
+# Unzip with progress percentage using python
+python3 - "$ZIP_FILE" <<'PYEOF'
+import sys, zipfile
+
+zip_path = sys.argv[1]
+with zipfile.ZipFile(zip_path, 'r') as zf:
+    members = zf.infolist()
+    total = len(members)
+    for i, member in enumerate(members, 1):
+        zf.extract(member)
+        percent = (i / total) * 100
+        print(f"\r  → Extracting... {percent:.1f}% ({i}/{total} files)", end='', flush=True)
+print("\n✅ Unzipped successfully.")
+PYEOF
 
 # 2. Find the .run file
 RUN_FILE=$(ls DaVinci_Resolve_Studio_*_Linux.run 2>/dev/null | head -n 1)
