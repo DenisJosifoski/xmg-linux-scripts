@@ -215,7 +215,8 @@ Every script can either be run through `./setup.sh` or executed individually:
 * **What it does:**
   * Configures NVIDIA Dynamic Power Management (`0x02`) and S0ix sleep states.
   * Adds `nvidia-drm.fbdev=1` to kernel parameters to prevent screen freezing on wake.
-  * Creates an automated systemd service (`disable-acpi-wakeups.service`) and sleep hook to disable rogue ACPI wakeup lines (`XHCI`, `PEG*`, `RP*`).
+  * Overrides `SYSTEMD_SLEEP_FREEZE_USER_SESSIONS=true` to prevent Wayland desktop hangs during sleep.
+  * Creates an automated systemd service (`disable-acpi-wakeups.service`) and sleep hook to disable rogue ACPI wakeup lines (`PEG1`, `RP*`), while preserving `XHCI` for USB & Bluetooth keyboard/mouse wakeups.
   * Rebuilds initramfs with `dracut -f` and updates SELinux contexts.
 * **Standalone Run:**
   ```bash
